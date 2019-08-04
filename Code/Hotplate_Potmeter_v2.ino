@@ -21,6 +21,7 @@ MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
 
 const int button = 2;
 const int solidstate = 15;
+const int poti = A0;
 
 
 const int temp_preheat = 150;
@@ -28,6 +29,8 @@ const int temp_reflow = 240;
 
 int temp_now = 0;
 int temp_next = 0;
+int temp_poti = 0;
+int temp_poti_old = 0;
 String state[] = {"OFF", "PREHEAT", "REFLOW", "COOLING"};
 int state_now = 0;
 
@@ -50,6 +53,37 @@ long t_solder = millis();
 
 void loop() {
   temp_now = thermocouple.readCelsius();
+
+  temp_poti = map(analogRead(poti), 1023, 0, temp_preheat, temp_reflow);
+
+  if (temp_poti != temp_poti_old) {
+    int v = 0;
+    display.fillScreen(WHITE);
+    display.setTextColor(BLACK);
+    display.setTextSize(1);
+    display.setCursor(X(1, 7), Y(1, 0.1));
+    display.println("PREHEAT");
+    display.setTextSize(2);
+    display.setCursor(X(2, 3), Y(2, 0.5));
+    while (v < 100) {
+      temp_poti = map(analogRead(poti), 1023, 0, temp_preheat, temp_reflow);
+      if (temp_poti > temp_poti_old + 1 || temp_poti < temp_poti_old - 1) {
+        display.fillScreen(WHITE);
+        display.setTextSize(1);
+        display.setCursor(X(1, 6), Y(1, 0.1));
+        display.println("REFLOW");
+        display.setTextSize(2);
+        display.setCursor(X(2, 3), Y(2, 0.5));
+        display.println(String(temp_poti));
+        display.display();
+        temp_poti_old = temp_poti;
+        v = 0;
+      }
+      v++;
+      delay(20);
+    }
+    temp_poti_old = temp_poti;
+  }
 
   if (millis() > t + 200 || millis() < t) {
     PrintScreen(state[state_now], temp_next, temp_now, time_count, perc);
@@ -82,9 +116,12 @@ void loop() {
     state_now++;
     if (state_now == 0) temp_next = 0;
     else if (state_now == 1) temp_next = temp_preheat;
-    else if (state_now == 2) temp_next = temp_reflow;
+    else if (state_now == 2) temp_next = temp_poti;
     else if (state_now == 3) temp_next = 0;
-    else if (state_now == 4) state_now = 0;
+    else if (state_now == 4) {
+      state_now = 0;
+      temp_next = 0;
+    }
   }
 
 
@@ -117,14 +154,14 @@ void loop() {
     time_count = 0;
   }
 
-  delay(50);
+  delay(30);
 }
 
 
 
 
 void regulate_temp(int temp, int should) {
-  if (should < temp - offset) {
+  if (should <= temp - offset) {
     digitalWrite(solidstate, LOW);
   }
   else if (should > temp + offset) {
