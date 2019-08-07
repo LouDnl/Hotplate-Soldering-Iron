@@ -3,22 +3,27 @@
  * Board: WeMos D1 R2 & mini
  * Board part number: -
  * 
- * Based completely on the code by Maker Moekoe
+ * Based completely on the code by Maker Moekoe:
  * https://github.com/makermoekoe/Hotplate-Soldering-Iron
+ * 
+ * max6675.cpp / delay.h fix included from :
+ * https://github.com/adafruit/MAX6675-library/issues/9
+ * 
+ * TactileButton.h is based on code from unknown source on Arduino forum.
  * 
  * Edited by LouD - 2019
  */
 
 #include <SPI.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-#include <max6675.h>
-#include <TactileButton.h>
+#include <Adafruit_GFX.h> // Adafruit graphics library
+#include <Adafruit_SSD1306.h> // Adafruit OLED-SSD1306 controller library
+#include <max6675.h> // use changed library because of issue with included delay.h
+#include <TactileButton.h> // small self made library, could also be included in code instead of library
 
 #define COOLDOWN_TIME 180 // in seconds
-#define PREHEAT_TIME 60
-#define REFLOW_TIME 60
+#define PREHEAT_TIME 60 // preheat time
+#define REFLOW_TIME 60 // reflow time
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -26,23 +31,26 @@
 #define OLED_RESET 0  // GPIO0
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
+// setup and initialize thermocouple
 int thermoDO = 12;
 int thermoCS = 13;
 int thermoCLK = 14;
-MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
+MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO); // 
 
-const int solidstate = 15;
-const int poti = A0;
-Button myButton(2);
+const int solidstate = 15; // solid state pin
+const int poti = A0; // potmeter pin
+Button myButton(2); // button pin
 
-const int temp_preheat = 140; // 150
-const int temp_reflow = 200; // 220
+const int temp_preheat = 149; // 150 preheat temperature
+const int temp_reflow = 221; // 220 reflow temperature
 
+// temperature storage variables
 int temp_now = 0;
 int temp_next = 0;
 int temp_poti = 0;
 int temp_poti_old = 0;
 
+// heater states
 String state[] = {"OFF", "PREHEAT", "REFLOW", "COOLING"};
 int state_now = 0;
 
@@ -72,12 +80,14 @@ long interval = 230;
 
 void loop() {
 
+  // read thermocouple
   unsigned long currentMillis = millis();
   if(currentMillis - previousMillis > interval) {
     previousMillis = currentMillis;  
     temp_now = thermocouple.readCelsius();
   }
-  
+
+  // read potmeter  
   temp_poti = map(analogRead(poti), 1023, 0, temp_preheat, temp_reflow);
 
   if (temp_poti != temp_poti_old) {
@@ -103,11 +113,13 @@ void loop() {
     temp_poti_old = temp_poti;
   }
 
+  // print state to display
   if (millis() > t + 200 || millis() < t) {
     PrintScreen(state[state_now], temp_next, temp_now, time_count, perc);
     t = millis();
   }
 
+  // button action
   if (myButton.isReleased()) {
     int c = 0;
     while (myButton.isReleased()) {
@@ -126,6 +138,7 @@ void loop() {
       }
     }
 
+  // state changer
     t_solder = millis();
     perc = 0,
     state_now++;
@@ -169,6 +182,7 @@ void loop() {
   }
 }
 
+// temperature regulator
 void regulate_temp(int temp, int should) {
   if (should <= temp - offset) {
     digitalWrite(solidstate, LOW);
@@ -178,6 +192,7 @@ void regulate_temp(int temp, int should) {
   }
 }
 
+// print screen
 void PrintScreen(String state, int soll_temp, int ist_temp, int tim, int percentage) {
   display.clearDisplay();
   display.setTextColor(WHITE);
